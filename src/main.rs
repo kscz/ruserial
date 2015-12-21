@@ -1,9 +1,12 @@
 extern crate termios;
 
+use std::str;
+
 use std::fs::File;
+
 use std::io;
 use std::io::prelude::*;
-use std::str;
+use std::io::stdout;
 
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::RawFd;
@@ -26,40 +29,20 @@ fn setup_fd(fd: RawFd) -> io::Result<()> {
 }
 
 fn main() {
-    let mut ser_file = match File::open("/dev/ttyUSB0") {
-        Ok(val) => val,
-        Err(_) => {
-            println!("Unable to open port!");
-            return;
-        }
-    };
+    let mut ser_file = File::open("/dev/ttyUSB0").ok().expect("Unable to open file handle!");
 
-    match setup_fd(ser_file.as_raw_fd()) {
-        Ok(_) => println!("Woo!"),
-        Err(_) => {
-            println!("Unable to configure serial port!");
-            return;
-        }
-    };
+    setup_fd(ser_file.as_raw_fd()).ok().expect("Unable to configure serial port!");
 
     let mut buffer = [0; 256];
     let mut buf_len = 0;
-
-    match ser_file.read(&mut buffer) {
-        Ok(n) => buf_len = n,
-        Err(_) => {
-            println!("Oh noes couldn't read!");
-            return;
+    
+    while match ser_file.read(&mut buffer) { Ok(n) => {buf_len = n; true}, Err(_) => false} {
+        if buf_len <= 0 {
+            break;
         }
-    };
+        print!("{}", str::from_utf8(&buffer[..buf_len]).ok().expect("Oh noes unable to parse as string!"));
+        assert!(stdout().flush().is_ok());
+    }
 
-    let output = match str::from_utf8(&buffer[..buf_len]) {
-        Ok(val) => val,
-        Err(_) => {
-            println!("Oh noe unable to parse as string!");
-            return;
-        }
-    };
-
-    println!("Got output: {}", output);
+    println!("");
 }
